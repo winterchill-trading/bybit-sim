@@ -77,32 +77,33 @@ Every response is Bybit's envelope `{"retCode", "retMsg", "result", "retExtInfo"
 | GET | `/v5/account/wallet-balance` | `accountType=UNIFIED`, one USDT coin |
 
 ```sh
-H='-H X-BAPI-API-KEY:alice -H X-BAPI-TIMESTAMP:'
-ts() { python3 -c 'import time; print(int(time.time() * 1000))'; }
+auth() {
+  echo "-H X-BAPI-API-KEY:alice -H X-BAPI-TIMESTAMP:$(python3 -c 'import time; print(int(time.time() * 1000))')"
+}
 
 curl -s 'localhost:3400/v5/market/instruments-info?category=linear'
 curl -s 'localhost:3400/v5/market/orderbook?category=linear&symbol=BTCUSDT&limit=5'
 curl -s 'localhost:3400/v5/market/tickers?category=linear&symbol=BTCUSDT'
 
 # Rest a post-only bid
-curl -s localhost:3400/v5/order/create $H$(ts) -d '{"category": "linear",
+curl -s localhost:3400/v5/order/create $(auth) -d '{"category": "linear",
   "symbol": "BTCUSDT", "side": "Buy", "orderType": "Limit", "qty": "0.01",
   "price": "99000", "timeInForce": "PostOnly", "orderLinkId": "bid-1"}'
 
 # Amend it, then cancel it
-curl -s localhost:3400/v5/order/amend $H$(ts) -d '{"category": "linear",
+curl -s localhost:3400/v5/order/amend $(auth) -d '{"category": "linear",
   "symbol": "BTCUSDT", "orderLinkId": "bid-1", "price": "99100"}'
-curl -s localhost:3400/v5/order/cancel $H$(ts) -d '{"category": "linear",
+curl -s localhost:3400/v5/order/cancel $(auth) -d '{"category": "linear",
   "symbol": "BTCUSDT", "orderLinkId": "bid-1"}'
 
 # Buy at market
-curl -s localhost:3400/v5/order/create $H$(ts) -d '{"category": "linear",
+curl -s localhost:3400/v5/order/create $(auth) -d '{"category": "linear",
   "symbol": "BTCUSDT", "side": "Buy", "orderType": "Market", "qty": "0.01"}'
 
-curl -s 'localhost:3400/v5/order/realtime?category=linear&symbol=BTCUSDT&openOnly=1' $H$(ts)
-curl -s 'localhost:3400/v5/execution/list?category=linear' $H$(ts)
-curl -s 'localhost:3400/v5/position/list?category=linear&symbol=BTCUSDT' $H$(ts)
-curl -s 'localhost:3400/v5/account/wallet-balance?accountType=UNIFIED' $H$(ts)
+curl -s 'localhost:3400/v5/order/realtime?category=linear&symbol=BTCUSDT&openOnly=1' $(auth)
+curl -s 'localhost:3400/v5/execution/list?category=linear' $(auth)
+curl -s 'localhost:3400/v5/position/list?category=linear&symbol=BTCUSDT' $(auth)
+curl -s 'localhost:3400/v5/account/wallet-balance?accountType=UNIFIED' $(auth)
 ```
 
 ### Order outcomes
