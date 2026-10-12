@@ -1,0 +1,17 @@
+(library
+ (name bybit_sim_anchor_test)
+ (inline_tests
+  (flags
+   (:standard -source-tree-root .)))
+ (libraries
+  async
+  bybit-sim
+  bybit-sim-anchor
+  core
+  exchange-core
+  exchange-core-engine
+  market-data
+  price-anchor
+  yojson)
+ (preprocess
+  (pps ppx_jane)))

@@ -1,0 +1,16 @@
+(library
+ (name bybit_sim_anchor)
+ (public_name bybit-sim-anchor)
+ (libraries
+  async
+  binance-client
+  bybit-client
+  bybit-sim
+  core
+  exchange-core
+  exchange-core-engine
+  market-data
+  price-anchor
+  yojson)
+ (preprocess
+  (pps ppx_jane)))
