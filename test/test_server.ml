@@ -260,6 +260,58 @@ let%expect_test "orders, fills and account endpoints" =
     return ())
 ;;
 
+let%expect_test "time in force and market orders" =
+  with_server (fun port ->
+    let%bind () =
+      post_as
+        "mm"
+        port
+        "/v5/order/create"
+        (limit ~side:"Sell" ~px:"100000" ~qty:"0.01" ())
+    in
+    [%expect
+      {| 200 {"retCode":0,"retMsg":"OK","result":{"orderId":"1","orderLinkId":""},"retExtInfo":{},"time":1700000000000} |}];
+    (* FOK for more than the book holds: accepted, then cancelled. *)
+    let%bind () =
+      post_as
+        "taker"
+        port
+        "/v5/order/create"
+        (limit ~tif:"FOK" ~side:"Buy" ~px:"100000" ~qty:"0.02" ())
+    in
+    [%expect
+      {| 200 {"retCode":0,"retMsg":"OK","result":{"orderId":"00000000-0000-4000-8000-000000000001","orderLinkId":""},"retExtInfo":{},"time":1700000000000} |}];
+    (* IOC fills what it can; the rest is cancelled. *)
+    let%bind () =
+      post_as
+        "taker"
+        port
+        "/v5/order/create"
+        (limit ~tif:"IOC" ~side:"Buy" ~px:"100000" ~qty:"0.02" ())
+    in
+    [%expect
+      {| 200 {"retCode":0,"retMsg":"OK","result":{"orderId":"2","orderLinkId":""},"retExtInfo":{},"time":1700000000000} |}];
+    (* A market sell with no bids. *)
+    let%bind () =
+      post_as
+        "taker"
+        port
+        "/v5/order/create"
+        {|{"category":"linear","symbol":"BTCUSDT","side":"Sell","orderType":"Market","qty":"0.001"}|}
+    in
+    [%expect
+      {| 200 {"retCode":0,"retMsg":"OK","result":{"orderId":"00000000-0000-4000-8000-000000000002","orderLinkId":""},"retExtInfo":{},"time":1700000000000} |}];
+    let%bind () =
+      get_as "taker" port "/v5/order/realtime?category=linear&symbol=BTCUSDT&openOnly=1"
+    in
+    [%expect
+      {| 200 {"retCode":0,"retMsg":"OK","result":{"category":"linear","list":[{"orderId":"00000000-0000-4000-8000-000000000002","orderLinkId":"","symbol":"BTCUSDT","side":"Sell","orderType":"Market","price":"0","qty":"0.001","timeInForce":"IOC","orderStatus":"Cancelled","cumExecQty":"0","cumExecValue":"0","avgPrice":"","leavesQty":"0","reduceOnly":false,"rejectReason":"EC_NoImmediateQtyToFill","positionIdx":0,"createdTime":"1700000000000","updatedTime":"1700000000000"},{"orderId":"2","orderLinkId":"","symbol":"BTCUSDT","side":"Buy","orderType":"Limit","price":"100000","qty":"0.02","timeInForce":"IOC","orderStatus":"Cancelled","cumExecQty":"0.01","cumExecValue":"1000","avgPrice":"100000","leavesQty":"0","reduceOnly":false,"rejectReason":"EC_NoError","positionIdx":0,"createdTime":"1700000000000","updatedTime":"1700000000000"},{"orderId":"00000000-0000-4000-8000-000000000001","orderLinkId":"","symbol":"BTCUSDT","side":"Buy","orderType":"Limit","price":"100000","qty":"0.02","timeInForce":"FOK","orderStatus":"Cancelled","cumExecQty":"0","cumExecValue":"0","avgPrice":"","leavesQty":"0","reduceOnly":false,"rejectReason":"EC_NoEnoughQtyToFill","positionIdx":0,"createdTime":"1700000000000","updatedTime":"1700000000000"}],"nextPageCursor":""},"retExtInfo":{},"time":1700000000000} |}];
+    let%bind () = get port "/v5/market/tickers?category=linear&symbol=BTCUSDT" in
+    [%expect
+      {| 200 {"retCode":0,"retMsg":"OK","result":{"category":"linear","list":[{"symbol":"BTCUSDT","lastPrice":"100000","markPrice":"100000","indexPrice":"100000","bid1Price":"","bid1Size":"","ask1Price":"","ask1Size":"","fundingRate":"0.0001","nextFundingTime":"1700006400000"}]},"retExtInfo":{},"time":1700000000000} |}];
+    return ())
+;;
+
 let%expect_test "batch and cancel-all" =
   with_server (fun port ->
     let%bind () =
