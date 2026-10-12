@@ -15,6 +15,14 @@ jobs:
             exchange-core https://github.com/winterchill-trading/exchange-core.git
             order-book https://github.com/winterchill-trading/order-book.git
             exchange-core-engine https://github.com/winterchill-trading/exchange-core.git
+            parquet https://github.com/winterchill-trading/parquet.git
+            market-data https://github.com/winterchill-trading/market-data.git
+            price-anchor https://github.com/winterchill-trading/price-anchor.git
+            venue-net https://github.com/winterchill-trading/venue-net.git
             bybit-protocol https://github.com/winterchill-trading/bybit-protocol.git
+            binance-protocol https://github.com/winterchill-trading/binance-protocol.git
+            mm-core https://github.com/winterchill-trading/mm-core.git
+            bybit-client https://github.com/winterchill-trading/bybit-client.git
+            binance-client https://github.com/winterchill-trading/binance-client.git
       - run: opam exec -- dune build
       - run: opam exec -- dune test
