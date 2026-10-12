@@ -115,6 +115,9 @@ order's fate is in `/v5/order/realtime` and on the `order` topic.
   hedge-mode `positionIdx` (10001), insufficient margin (110007), duplicate
   `orderLinkId` (110072), reduce-only with nothing to reduce (110017), below 5 USDT
   (110094).
+  In a batch, an item the engine rejected reports the engine's order id (it was never
+  created, but the id is consumed); an item refused before the engine (for example an
+  unknown symbol) reports an empty `orderId`.
 - Accepted, then `Cancelled` with a `rejectReason`: post-only crossing
   (`EC_PostOnlyWillTakeLiquidity`), IOC or market order with nothing to fill
   (`EC_NoImmediateQtyToFill`), FOK that cannot fill completely (`EC_NoEnoughQtyToFill`),

@@ -117,9 +117,11 @@ let cancelled_at_once t account p reason =
   Ok (ack o)
 ;;
 
-let create_order t account (p : Create_order.Params.t) =
+(* The engine's id for the order when it was placed or rejected by the engine; [None] when
+   validation refused it before the engine saw it. *)
+let place_order t account (p : Create_order.Params.t) =
   match Adapt.order_request t.exchange p with
-  | Error e -> Error e
+  | Error e -> None, Error e
   | Ok req ->
     let fok_unfillable =
       match Adapt.time_in_force p, req.px with
@@ -128,21 +130,22 @@ let create_order t account (p : Create_order.Params.t) =
       | _ -> false
     in
     if fok_unfillable
-    then cancelled_at_once t account p No_enough_qty_to_fill
+    then None, cancelled_at_once t account p No_enough_qty_to_fill
     else (
-      let status = Exchange.place t.exchange account req in
+      let engine_id, status = Exchange.place_with_order_id t.exchange account req in
       match status with
       | Resting { order_id; _ } | Filled { order_id; _ } ->
         let o = Orders.placed t.orders account p order_id ~time:(now t) in
         sync t;
-        Ok (ack o)
+        Some engine_id, Ok (ack o)
       | Rejected reason ->
         sync t;
         (match Adapt.rejection reason with
-         | Api_error e -> Error e
-         | Cancelled reason -> cancelled_at_once t account p reason))
+         | Api_error e -> Some engine_id, Error e
+         | Cancelled reason -> Some engine_id, cancelled_at_once t account p reason))
 ;;
 
+let create_order t account p = snd (place_order t account p)
 let max_batch = 20
 
 let create_batch t account params =
@@ -153,7 +156,7 @@ let create_batch t account params =
   else (
     let results =
       List.map params ~f:(fun (p : Create_order.Params.t) ->
-        let result = create_order t account p in
+        let engine_id, result = place_order t account p in
         let item : Create_batch.Item.t =
           match result with
           | Ok ack ->
@@ -166,7 +169,10 @@ let create_batch t account params =
           | Error _ ->
             { category = Linear
             ; symbol = p.symbol
-            ; order_id = Order_id.of_string ""
+            ; order_id =
+                (match engine_id with
+                 | Some id -> Order_id.of_exchange_core id
+                 | None -> Order_id.of_string "")
             ; order_link_id = p.order_link_id
             ; create_at = Some (Adapt.ms (now t))
             }

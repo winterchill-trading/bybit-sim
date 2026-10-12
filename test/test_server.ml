@@ -326,7 +326,7 @@ let%expect_test "batch and cancel-all" =
            (limit ~link:"b-3" ~side:"Sell" ~px:"101000" ~qty:"0.01" ()))
     in
     [%expect
-      {| 200 {"retCode":0,"retMsg":"OK","result":{"list":[{"category":"linear","symbol":"BTCUSDT","orderId":"1","orderLinkId":"","createAt":"1700000000000"},{"category":"linear","symbol":"BTCUSDT","orderId":"","orderLinkId":"","createAt":"1700000000000"},{"category":"linear","symbol":"BTCUSDT","orderId":"3","orderLinkId":"b-3","createAt":"1700000000000"}]},"retExtInfo":{"list":[{"code":0,"msg":"OK"},{"code":10001,"msg":"params error: qty must be a positive multiple of qtyStep"},{"code":0,"msg":"OK"}]},"time":1700000000000} |}];
+      {| 200 {"retCode":0,"retMsg":"OK","result":{"list":[{"category":"linear","symbol":"BTCUSDT","orderId":"1","orderLinkId":"","createAt":"1700000000000"},{"category":"linear","symbol":"BTCUSDT","orderId":"2","orderLinkId":"","createAt":"1700000000000"},{"category":"linear","symbol":"BTCUSDT","orderId":"3","orderLinkId":"b-3","createAt":"1700000000000"}]},"retExtInfo":{"list":[{"code":0,"msg":"OK"},{"code":10001,"msg":"params error: qty must be a positive multiple of qtyStep"},{"code":0,"msg":"OK"}]},"time":1700000000000} |}];
     let%bind () = post_as "mm" port "/v5/order/cancel-all" {|{"category":"linear"}|} in
     [%expect
       {| 200 {"retCode":10001,"retMsg":"params error: symbol, baseCoin or settleCoin is required","result":{},"retExtInfo":{},"time":1700000000000} |}];
