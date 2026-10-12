@@ -24,6 +24,8 @@ dune exec bybit-sim -- -port 3400
 | `-symbols` | all | comma-separated symbols the noise traders trade |
 | `-noise-traders` | 10 | noise trader accounts; 0 disables the market simulation |
 | `-initial-balance` | 1000000 | USDT credited to any API key on first use |
+| `-anchor ...` | | follow a reference market, see [Anchoring](#anchoring-to-a-reference-market) |
+| `-input-journal` | | binary journal of every engine input |
 | `-log-level` | info | `debug`, `info`, `warn` or `error` |
 
 Logs go to stderr: fills and liquidations at `info`, every event and websocket
@@ -39,6 +41,78 @@ The universe is BTCUSDT, ETHUSDT and SOLUSDT (see `/v5/market/instruments-info`)
 
 All have a 5 USDT minimum order value, Bybit's base fees (taker 0.055%, maker 0.02%),
 10x leverage and funding every 8 hours at 0.01%.
+
+## Anchoring to a reference market
+
+`-anchor VENUE:SYMBOL=SIMSYM` ties a simulated symbol to a real market through
+[price-anchor](https://github.com/winterchill-trading/price-anchor): the mark price and
+funding rate follow the reference, its top levels rest in the simulated book (from the
+accounts `anchor:<venue>:<symbol>`), and resting client orders fill when the reference
+trades at or through them (trade replay, from `anchor-taker:<venue>:<symbol>`). Prices,
+depth and trade flow come from the reference; ticks, lots, the 5 USDT minimum and fees
+stay Bybit's. Anchored symbols get no noise traders unless `-anchor-noise N`.
+
+Live, read-only (no keys), against Bybit or Binance mainnet:
+
+```sh
+dune exec bybit-sim -- -noise-traders 0 \
+  -anchor bybit:BTCUSDT=BTCUSDT -anchor binance:ETHUSDT=ETHUSDT
+curl -s localhost:3400/sim/anchor
+```
+
+Recorded, from market-recorder's raw minute files (here the minute in
+`anchor/test/fixtures`) or from normalized event logs:
+
+```sh
+dune exec bybit-sim -- -noise-traders 0 -anchor bybit:BTCUSDT=BTCUSDT \
+  -anchor-raw anchor/test/fixtures \
+  -anchor-from 2026-10-12T15:05:00Z -anchor-to 2026-10-12T15:06:00Z \
+  -anchor-speed 1 -input-journal run.journal
+dune exec bybit-sim -- -anchor bybit:BTCUSDT=BTCUSDT \
+  -anchor-norm /data/norm -anchor-from 2026-10-11 -anchor-to 2026-10-12
+```
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `-anchor VENUE:SYMBOL=SIMSYM` | | follow a reference market (repeatable); venues `bybit` and `binance` |
+| `-anchor-levels N` | 5 | reference levels per side resting in the book |
+| `-anchor-mark-interval-ms MS` | 100 | minimum time between two mark updates |
+| `-anchor-max-staleness-ms MS` | 5000 | a reference silent for longer is stale |
+| `-anchor-noise N` | 0 | noise traders kept on anchored symbols (with `-noise-traders` > 0) |
+| `-anchor-price-factor F`, `-anchor-size-factor F` | 1 | scale reference prices and sizes |
+| `-anchor-raw DIR` | | replay raw minute files under `DIR/raw` through the venue client's normalizer |
+| `-anchor-norm DIR` | | replay normalized event logs (UTC days of `-anchor-from` to `-anchor-to`) |
+| `-anchor-from T`, `-anchor-to T` | | recorded range, `[from, to)`; ISO 8601 times or UTC dates (a `-anchor-to` date means its end) |
+| `-anchor-speed X` | 1 | pacing of recorded sources: 1 real time, 0 as fast as possible |
+| `-anchor-status-interval-s S` | 10 | log every anchor's status every S seconds (0 disables) |
+| `-input-journal FILE` | | write every engine input to a journal that replays the whole run |
+
+`GET /sim/anchor` returns each anchor's state: `source` (`waiting`, `running`, `done`,
+`failed`), `fresh`, `stale_reason` (`waiting_for_book`, `silent` or a gap),
+`stale_seconds`, `went_stale`, `gaps`, `events`, `reference_price`, `shadow_levels`
+resting, `replay_fills`, `replays_rejected`, `marks_set`. Fresh and stale transitions are
+logged as they happen.
+
+```json
+{"anchors":[{"reference":"bybit:BTCUSDT","symbol":"BTCUSDT","source":"running","fresh":true,
+  "stale_reason":null,"stale_seconds":2.01,"went_stale":1,"gaps":0,"events":307,
+  "reference_price":"82928","shadow_levels":10,"replay_fills":0,"replays_rejected":0,"marks_set":2}]}
+```
+
+`scripts/anchor-demo.sh [SPEED [MARKET-MAKER FLAGS]]` runs the simulator on the recorded
+minute, connects [market-maker](https://github.com/winterchill-trading/market-maker) and
+prints once a second the reference price, the simulated best bid and ask, and the market
+maker's best quotes. With `-half-spread-bps 0.5` its quotes sit inside the moves of that
+minute and get trade-replay fills (3 in a run of 22 seconds).
+
+How it runs: the anchors live in the simulator process, on the Async scheduler thread.
+Every request, timer and market simulation tick steps the exchange clock and then calls
+each anchor's `step` (staleness, held-back marks); each reference item is applied and
+then published to the websocket streams like any other change. Everything the anchor does
+goes through the engine's journaled calls, so `-input-journal` replays an anchored run
+without the reference data (`anchor/test/test_recorded.ml` checks this on the recorded
+minute). Live sources are never paced; with `-anchor-speed` above 1 the exchange clock
+runs ahead of the wall clock until the recording ends.
 
 ## Authentication
 
@@ -189,6 +263,10 @@ opam pin add exchange-core https://github.com/winterchill-trading/exchange-core.
 opam pin add order-book https://github.com/winterchill-trading/order-book.git --no-action
 opam pin add exchange-core-engine https://github.com/winterchill-trading/exchange-core.git --no-action
 opam pin add bybit-protocol https://github.com/winterchill-trading/bybit-protocol.git --no-action
+# for the binary (package bybit-sim-anchor):
+for p in parquet market-data price-anchor venue-net binance-protocol mm-core bybit-client binance-client; do
+  opam pin add $p https://github.com/winterchill-trading/$p.git --no-action
+done
 opam install . --deps-only --with-test
 dune build && dune test
 ```
@@ -200,16 +278,33 @@ CI installs the pinned siblings and the opam dependencies through the shared
 [ox-setup](https://github.com/winterchill-trading/infra/blob/main/docs/ci.md) action, which
 caches the built opam switch between runs.
 
+## Packages
+
+- `bybit-sim`: the library (`Bybit_sim`), depending only on the engine and
+  bybit-protocol. bybit-client's tests use it.
+- `bybit-sim-anchor`: the `bybit-sim` binary and the `Bybit_sim_anchor` library
+  (`Spec`, `Reference`, `Anchors`), which bring in price-anchor and the Bybit and
+  Binance clients. A separate package because those clients depend on the
+  `bybit-sim` library for their tests; one package would be an opam cycle.
+
 ## Modules
 
-All modules live under `Bybit_sim`.
+`Bybit_sim`:
 
 | Module | Description |
 | --- | --- |
 | `Adapt` | Universe and Bybit trading rules, request validation, engine rejection to retCode or rejectReason, conversions to bybit-protocol types (orderbook and deltas, trades, tickers, executions, positions, wallet) |
 | `Orders` | Order registry: Bybit order ids stable across amends, order type and time in force, cumulative fills, status and reject reason, closed order history |
 | `Venue` | The engine plus the registry: Bybit's trading and account endpoints, event buffering for the streams |
-| `Server` | cohttp-async server for the REST routes and both websocket streams (async_websocket); drives the clock and the market simulation |
+| `Server` | cohttp-async server for the REST routes and both websocket streams (async_websocket); drives the clock and the market simulation; clock step hooks and plain JSON routes for simulator endpoints |
+
+`Bybit_sim_anchor`:
+
+| Module | Description |
+| --- | --- |
+| `Spec` | the `-anchor VENUE:SYMBOL=SIMSYM` argument |
+| `Reference` | per reference venue: the client's live feed (mainnet, read-only) and raw normalizer |
+| `Anchors` | the anchors of a running server: creation, sources (live, raw, norm), clock hook, `/sim/anchor` status, periodic summary |
 
 All engine access happens on the Async scheduler thread, so there is no locking. Before
 each request the exchange clock is stepped to the wall clock (funding and liquidation run
@@ -222,4 +317,6 @@ path.
 `dune test` runs the server over HTTP and websocket on a free port with a fixed clock
 (market data, order outcomes, amend, cancel, batch, executions, positions, wallet,
 authentication, public and private streams), unit tests of the conversions, and a seeded
-market simulation on the Bybit universe.
+market simulation on the Bybit universe. `anchor/test` covers the anchor flags, a feed
+driving shadow levels, a replay fill and staleness, the recorded Bybit minute through the
+raw normalizer with a journal replay of the whole run, and normalized event logs.
