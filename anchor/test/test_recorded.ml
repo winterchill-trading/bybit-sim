@@ -93,3 +93,53 @@ let%expect_test "a recorded minute, and its journal replays the run" =
         ~same_state:(Sexp.equal (state exchange) (state replayed) : bool)];
   [%expect {| ((inputs 3409) (same_state true)) |}]
 ;;
+
+let%expect_test "normalized event logs" =
+  Log.Global.set_output [];
+  let dir = "norm-source-test" in
+  let%bind () = Unix.system_exn (sprintf "rm -rf %s && mkdir -p %s" dir dir) in
+  let at s = Time_ns.add t0 (Time_ns.Span.of_sec s) in
+  let level (px, sz) =
+    { Market_data.L2_update.Level.price = Price.of_string px; size = Size.of_string sz }
+  in
+  let writer = Market_data.Event_log.Writer.create ~dir () in
+  List.iter
+    ~f:(Market_data.Event_log.Writer.append writer)
+    [ Market_data.Event.L2
+        { instrument = spec.reference
+        ; exch_ts = at 0.
+        ; recv_ts = at 0.
+        ; kind = Snapshot
+        ; bids = List.map ~f:level [ "82600.0", "1"; "82599.9", "2" ]
+        ; asks = List.map ~f:level [ "82600.1", "1"; "82600.2", "2" ]
+        }
+    ; Trade
+        { instrument = spec.reference
+        ; exch_ts = at 0.5
+        ; recv_ts = at 0.5
+        ; price = Price.of_string "82600.1"
+        ; size = Size.of_string "0.2"
+        ; side = Buy
+        ; trade_id = "1"
+        }
+    ];
+  let%bind () = Market_data.Event_log.Writer.close writer in
+  let server =
+    Server.create
+      ~now:(fun () -> Time_ns.to_int_ns_since_epoch t0)
+      (Adapt.create_exchange ())
+  in
+  let anchors =
+    ok_exn
+      (Anchors.create ~config:{ Anchors.Config.default with speed = 0. } server [ spec ])
+  in
+  let date = Time_ns.to_date t0 ~zone:Time_float.Zone.utc in
+  let%bind () = Anchors.run anchors (Norm { dir; from = date; to_ = date }) in
+  print_s (Anchors.summary anchors);
+  [%expect
+    {|
+    (((anchor bybit:BTCUSDT=BTCUSDT) (source done) (stale ()) (stale_seconds 0)
+      (events 2) (price (82600.1)) (shadow_levels 4) (replay_fills 0)))
+    |}];
+  Unix.system_exn (sprintf "rm -rf %s" dir)
+;;
