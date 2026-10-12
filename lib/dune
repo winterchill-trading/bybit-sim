@@ -1,0 +1,21 @@
+(library
+ (name bybit_sim)
+ (public_name bybit-sim)
+ (libraries
+  async
+  async_websocket
+  bybit-protocol
+  cohttp
+  cohttp-async
+  core
+  core_unix
+  exchange-core
+  exchange-core-engine
+  fixed-decimal
+  http
+  order-book
+  ppx_yojson_conv_lib
+  uri
+  yojson)
+ (preprocess
+  (pps ppx_jane)))
