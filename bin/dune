@@ -9,6 +9,7 @@
   async
   bybit-protocol
   bybit-sim
+  bybit-sim-anchor
   core
   core_unix.command_unix
   exchange-core

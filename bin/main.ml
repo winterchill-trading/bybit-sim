@@ -40,6 +40,44 @@ let command =
             (Usd.to_string Server.Config.default.initial_balance)
             string)
          ~doc:"USDT balance credited to any API key on first use"
+     and anchor_specs =
+       flag
+         "-anchor"
+         (listed Bybit_sim_anchor.Spec.arg_type)
+         ~doc:
+           "VENUE:SYMBOL=SIMSYM follow a reference market (repeatable), e.g. \
+            binance:BTCUSDT=BTCUSDT; live through the venue's public stream unless a \
+            recorded source is given"
+     and anchor_levels =
+       flag
+         "-anchor-levels"
+         (optional_with_default Bybit_sim_anchor.Anchors.Config.default.levels int)
+         ~doc:"N reference levels per side resting in the simulated book (default 5)"
+     and anchor_mark_interval_ms =
+       flag
+         "-anchor-mark-interval-ms"
+         (optional_with_default 100 int)
+         ~doc:"MS minimum time between two mark updates (default 100)"
+     and anchor_max_staleness_ms =
+       flag
+         "-anchor-max-staleness-ms"
+         (optional_with_default 5000 int)
+         ~doc:"MS a reference silent for longer is stale (default 5000)"
+     and anchor_noise =
+       flag
+         "-anchor-noise"
+         (optional_with_default 0 int)
+         ~doc:"N noise traders kept on anchored symbols (default 0)"
+     and anchor_price_factor =
+       flag
+         "-anchor-price-factor"
+         (optional_with_default 1. float)
+         ~doc:"F reference prices are multiplied by F (default 1)"
+     and anchor_size_factor =
+       flag
+         "-anchor-size-factor"
+         (optional_with_default 1. float)
+         ~doc:"F reference sizes are multiplied by F (default 1)"
      and log_level =
        flag
          "-log-level"
@@ -64,9 +102,9 @@ let command =
           /v5/private)"
          (Server.port http);
        Server.start_periodic server;
-       if noise_traders > 0
-       then (
-         let sim =
+       let market_sim =
+         Option.some_if (noise_traders > 0) ()
+         |> Option.map ~f:(fun () ->
            Market_sim.create
              { Adapt.market_sim_config with
                seed
@@ -74,9 +112,26 @@ let command =
              ; noise_traders
              ; symbols = List.map (Option.value symbols ~default:[]) ~f:Symbol.of_string
              }
-             exchange
+             exchange)
+       in
+       if not (List.is_empty anchor_specs)
+       then (
+         let config =
+           { Bybit_sim_anchor.Anchors.Config.default with
+             levels = anchor_levels
+           ; mark_interval = Time_ns.Span.of_int_ms anchor_mark_interval_ms
+           ; max_staleness = Time_ns.Span.of_int_ms anchor_max_staleness_ms
+           ; noise_traders = anchor_noise
+           ; price_factor = anchor_price_factor
+           ; size_factor = anchor_size_factor
+           }
          in
-         Server.run_market_sim server sim);
+         let anchors =
+           Bybit_sim_anchor.Anchors.create ~config ?market_sim server anchor_specs
+           |> ok_exn
+         in
+         don't_wait_for (Bybit_sim_anchor.Anchors.run anchors Live));
+       Option.iter market_sim ~f:(Server.run_market_sim server);
        Cohttp_async.Server.close_finished http)
 ;;
 
