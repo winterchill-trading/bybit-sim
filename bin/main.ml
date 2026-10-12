@@ -78,6 +78,41 @@ let command =
          "-anchor-size-factor"
          (optional_with_default 1. float)
          ~doc:"F reference sizes are multiplied by F (default 1)"
+     and anchor_raw =
+       flag
+         "-anchor-raw"
+         (optional string)
+         ~doc:
+           "DIR replay the recorder's raw minute files under DIR (containing raw/) \
+            instead of the live stream"
+     and anchor_norm =
+       flag
+         "-anchor-norm"
+         (optional string)
+         ~doc:"DIR replay normalized event logs under DIR instead of the live stream"
+     and anchor_from =
+       flag
+         "-anchor-from"
+         (optional string)
+         ~doc:"T start of the recorded range (2026-10-12T15:05:00Z or a UTC date)"
+     and anchor_to =
+       flag
+         "-anchor-to"
+         (optional string)
+         ~doc:"T end of the recorded range, exclusive (a date means its end)"
+     and anchor_speed =
+       flag
+         "-anchor-speed"
+         (optional_with_default 1. float)
+         ~doc:
+           "X pacing of recorded sources: 1 real time, 0 as fast as possible (default 1)"
+     and input_journal =
+       flag
+         "-input-journal"
+         (optional string)
+         ~doc:
+           "FILE write every engine input (client requests, noise traders, anchors) to \
+            FILE, a binary journal that replays the whole run"
      and log_level =
        flag
          "-log-level"
@@ -87,7 +122,25 @@ let command =
      fun () ->
        Log.Global.set_output [ Log.Output.stderr () ];
        Log.Global.set_level log_level;
+       let anchor_source =
+         Bybit_sim_anchor.Anchors.Source.of_flags
+           ~raw:anchor_raw
+           ~norm:anchor_norm
+           ~from:anchor_from
+           ~to_:anchor_to
+         |> ok_exn
+       in
        let exchange = Adapt.create_exchange () in
+       Option.iter input_journal ~f:(fun path ->
+         let journal = Exchange_core_engine.Journal.create path in
+         Exchange_core_engine.Journal.attach journal exchange;
+         Clock_ns.every Time_ns.Span.second (fun () ->
+           Exchange_core_engine.Journal.flush journal);
+         Shutdown.at_shutdown (fun () ->
+           Exchange_core_engine.Journal.close journal;
+           return ());
+         (* So that ^C and SIGTERM still run the at_shutdown handlers. *)
+         Signal.handle Signal.terminating ~f:(fun _ -> shutdown 0));
        let server =
          Server.create
            ~config:
@@ -117,20 +170,20 @@ let command =
        if not (List.is_empty anchor_specs)
        then (
          let config =
-           { Bybit_sim_anchor.Anchors.Config.default with
-             levels = anchor_levels
+           { Bybit_sim_anchor.Anchors.Config.levels = anchor_levels
            ; mark_interval = Time_ns.Span.of_int_ms anchor_mark_interval_ms
            ; max_staleness = Time_ns.Span.of_int_ms anchor_max_staleness_ms
            ; noise_traders = anchor_noise
            ; price_factor = anchor_price_factor
            ; size_factor = anchor_size_factor
+           ; speed = anchor_speed
            }
          in
          let anchors =
            Bybit_sim_anchor.Anchors.create ~config ?market_sim server anchor_specs
            |> ok_exn
          in
-         don't_wait_for (Bybit_sim_anchor.Anchors.run anchors Live));
+         don't_wait_for (Bybit_sim_anchor.Anchors.run anchors anchor_source));
        Option.iter market_sim ~f:(Server.run_market_sim server);
        Cohttp_async.Server.close_finished http)
 ;;
