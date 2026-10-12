@@ -79,10 +79,7 @@ let config ?(instruments = default_instruments) () =
 let create_exchange ?instruments () = Exchange.create ~config:(config ?instruments ()) ()
 
 let market_sim_config =
-  { Exchange_core_engine.Market_sim.Config.default with
-    min_notional = 200.
-  ; max_notional = 20_000.
-  }
+  { Exchange_core_engine.Market_sim.Config.default with max_notional = 20_000. }
 ;;
 
 let instruments_info ?symbol ex : Instruments_info.t =

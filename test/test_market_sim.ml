@@ -32,10 +32,10 @@ let%expect_test "noise traders keep two-sided books around the reference prices"
   print_s [%message (trades : int)];
   [%expect
     {|
-    ((symbol BTCUSDT) (mark 99798.5) (bid (99764.9)) (ask (99853.3)))
-    ((symbol ETHUSDT) (mark 3510.73) (bid (3507.9)) (ask (3509.21)))
-    ((symbol SOLUSDT) (mark 150.15) (bid (150.17)) (ask (150.25)))
-    (trades 66)
+    ((symbol BTCUSDT) (mark 99901.8) (bid (99938.9)) (ask (99965.4)))
+    ((symbol ETHUSDT) (mark 3509.52) (bid (3504.29)) (ask (3504.89)))
+    ((symbol SOLUSDT) (mark 150.42) (bid (150.42)) (ask (150.46)))
+    (trades 69)
     |}]
 ;;
 

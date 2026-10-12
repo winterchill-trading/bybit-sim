@@ -35,8 +35,7 @@ val create_exchange
 (** ["BTC"] for ["BTCUSDT"]: the symbol without its [USDT] suffix. *)
 val base_coin : Symbol.t -> string
 
-(** {!Exchange_core_engine.Market_sim.Config.default} with orders of 200 to 20000 USDT
-    (Bybit's qty steps are coarse: smaller notionals often round down to zero). *)
+(** {!Exchange_core_engine.Market_sim.Config.default} with orders up to 20000 USDT. *)
 val market_sim_config : Exchange_core_engine.Market_sim.Config.t
 
 (** The instruments of the exchange in Bybit's format, optionally only [symbol]. *)
