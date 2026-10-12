@@ -32,7 +32,7 @@ mm_exe="$DUNE_BUILD_DIR/default/market-maker/bin/main.exe"
 log_dir="$(mktemp -d "${TMPDIR:-/tmp}/anchor-demo.XXXXXX")"
 port="${PORT:-$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')}"
 base_url="http://127.0.0.1:$port"
-key=anchor-demo
+key="anchor-demo"
 
 sim_pid=""
 mm_pid=""
