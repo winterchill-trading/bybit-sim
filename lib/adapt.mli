@@ -23,8 +23,8 @@ val fees : Exchange_core.Fee_schedule.t
 val instrument : Instruments_info.Instrument.t -> Exchange_core.Instrument.t
 
 (** {!Exchange.Config.default} with the given instruments (default
-    {!default_instruments}), 8-hourly funding at 0.01%, a 5 USDT minimum order value and
-    25 book levels. *)
+    {!default_instruments}), 10x default leverage, 8-hourly funding at 0.01%, a 5 USDT
+    minimum order value and 25 book levels. *)
 val config : ?instruments:Instruments_info.Instrument.t list -> unit -> Exchange.Config.t
 
 val create_exchange

@@ -70,6 +70,7 @@ let config ?(instruments = default_instruments) () =
     instruments = List.map instruments ~f:instrument
   ; funding_interval_ns = Time_ns.Span.to_int_ns (Time_ns.Span.of_hr 8.)
   ; default_funding_rate = 0.0001
+  ; default_leverage = 10
   ; min_order_value = min_notional
   ; l2_levels = 25
   }
