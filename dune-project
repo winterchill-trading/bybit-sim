@@ -34,3 +34,31 @@
   bybit-protocol
   order-book
   ppx_jane))
+
+(package
+ (name bybit-sim-anchor)
+ (synopsis
+  "The bybit-sim binary, with markets anchored to a live or recorded reference venue")
+ (description
+  "A separate package so that the bybit-sim library stays free of the venue clients, whose tests depend on it.")
+ (depends
+  (ocaml
+   (>= 5.2))
+  dune
+  core
+  core_unix
+  async
+  cohttp
+  yojson
+  uri
+  fixed-decimal
+  exchange-core
+  exchange-core-engine
+  bybit-protocol
+  (bybit-sim
+   (= :version))
+  market-data
+  price-anchor
+  bybit-client
+  binance-client
+  ppx_jane))

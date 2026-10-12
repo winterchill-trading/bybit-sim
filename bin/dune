@@ -4,6 +4,7 @@
 (executable
  (name main)
  (public_name bybit-sim)
+ (package bybit-sim-anchor)
  (libraries
   async
   bybit-protocol
