@@ -24,6 +24,7 @@
   core_unix
   async
   cohttp-async
+  http
   async_websocket
   uri
   yojson
