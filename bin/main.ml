@@ -68,16 +68,11 @@ let command =
        then (
          let sim =
            Market_sim.create
-             { Market_sim.Config.default with
+             { Adapt.market_sim_config with
                seed
              ; vol_bps
              ; noise_traders
              ; symbols = List.map (Option.value symbols ~default:[]) ~f:Symbol.of_string
-             ; initial_prices = Adapt.initial_prices
-             ; (* Bybit's qty steps are coarser than Hyperliquid's; small notionals would
-                  round down to zero. *)
-               min_notional = 200.
-             ; max_notional = 20_000.
              }
              exchange
          in

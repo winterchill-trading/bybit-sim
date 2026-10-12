@@ -84,6 +84,14 @@ let initial_prices =
     ~f:(fun (s, p) -> Symbol.of_string s, Price.of_string p)
 ;;
 
+let market_sim_config =
+  { Exchange_core_engine.Market_sim.Config.default with
+    initial_prices
+  ; min_notional = 200.
+  ; max_notional = 20_000.
+  }
+;;
+
 let instruments_info ?symbol ex : Instruments_info.t =
   { category = Linear
   ; list =
