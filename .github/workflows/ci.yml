@@ -8,17 +8,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ocaml/setup-ocaml@v3
+      - uses: winterchill-trading/infra/.github/actions/ox-setup@main
         with:
-          ocaml-compiler: ocaml-variants.5.2.0+ox
-          opam-repositories: |
-            ox: https://github.com/oxcaml/opam-repository.git#afddc8337950dbc02863fe30ae58735a1cf2719f
-            default: https://github.com/ocaml/opam-repository.git
-      - run: opam pin add fixed-decimal https://github.com/winterchill-trading/fixed-decimal.git --no-action --yes
-      - run: opam pin add exchange-core https://github.com/winterchill-trading/exchange-core.git --no-action --yes
-      - run: opam pin add order-book https://github.com/winterchill-trading/order-book.git --no-action --yes
-      - run: opam pin add exchange-core-engine https://github.com/winterchill-trading/exchange-core.git --no-action --yes
-      - run: opam pin add bybit-protocol https://github.com/winterchill-trading/bybit-protocol.git --no-action --yes
-      - run: opam install . --deps-only --with-test
+          pins: |
+            fixed-decimal https://github.com/winterchill-trading/fixed-decimal.git
+            exchange-core https://github.com/winterchill-trading/exchange-core.git
+            order-book https://github.com/winterchill-trading/order-book.git
+            exchange-core-engine https://github.com/winterchill-trading/exchange-core.git
+            bybit-protocol https://github.com/winterchill-trading/bybit-protocol.git
       - run: opam exec -- dune build
       - run: opam exec -- dune test

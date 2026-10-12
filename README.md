@@ -196,6 +196,10 @@ dune build && dune test
 Inside a dune workspace that also contains the sibling repos, dune uses their sources and
 the pins are not needed.
 
+CI installs the pinned siblings and the opam dependencies through the shared
+[ox-setup](https://github.com/winterchill-trading/infra/blob/main/docs/ci.md) action, which
+caches the built opam switch between runs.
+
 ## Modules
 
 All modules live under `Bybit_sim`.
