@@ -1,0 +1,16 @@
+; The main module is [main] rather than [bybit_sim] so that it does not clash with the
+; [bybit_sim] library's wrapper module.
+
+(executable
+ (name main)
+ (public_name bybit-sim)
+ (libraries
+  async
+  bybit-protocol
+  bybit-sim
+  core
+  core_unix.command_unix
+  exchange-core
+  exchange-core-engine)
+ (preprocess
+  (pps ppx_jane)))
