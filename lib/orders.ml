@@ -37,6 +37,7 @@ module Order = struct
   let order_link_id t = t.order_link_id
   let order_type t = t.order_type
   let time_in_force t = t.time_in_force
+  let reduce_only t = t.reduce_only
   let price t = t.price
   let qty t = t.qty
   let cum_exec_qty t = t.cum_exec_qty

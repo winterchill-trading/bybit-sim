@@ -24,6 +24,7 @@ module Order : sig
   val order_link_id : t -> Order_link_id.t option
   val order_type : t -> Order_type.t
   val time_in_force : t -> Time_in_force.t
+  val reduce_only : t -> bool
   val price : t -> Price.t
   val qty : t -> Size.t
   val cum_exec_qty : t -> Size.t
