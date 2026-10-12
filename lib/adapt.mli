@@ -32,6 +32,9 @@ val create_exchange
   -> unit
   -> Exchange.t
 
+(** ["BTC"] for ["BTCUSDT"]: the symbol without its [USDT] suffix. *)
+val base_coin : Symbol.t -> string
+
 (** Starting reference prices for the market simulation: BTCUSDT 100000, ETHUSDT 3500,
     SOLUSDT 150. *)
 val initial_prices : (Symbol.t * Price.t) list
