@@ -464,6 +464,18 @@ let%expect_test "public websocket" =
       {"topic":"publicTrade.BTCUSDT","type":"snapshot","ts":1700000000000,"data":[{"T":1700000000000,"s":"BTCUSDT","S":"Buy","v":"0.004","p":"100000","L":"ZeroPlusTick","i":"1","BT":false,"seq":1}]}
       {"topic":"orderbook.50.BTCUSDT","type":"delta","ts":1700000000000,"data":{"s":"BTCUSDT","b":[],"a":[["100000","0.006"]],"u":3,"seq":2},"cts":1700000000000}
       |}];
+    Pipe.write_without_pushback
+      outgoing
+      {|{"op":"subscribe","args":["tickers.BTCUSDT","orderbook.1.BTCUSDT"]}|};
+    let%bind () = receive incoming in
+    let%bind () = receive incoming in
+    let%bind () = receive incoming in
+    [%expect
+      {|
+      {"success":true,"ret_msg":"subscribe","conn_id":"sim-conn-0","op":"subscribe"}
+      {"topic":"tickers.BTCUSDT","type":"snapshot","data":{"symbol":"BTCUSDT","lastPrice":"100000","markPrice":"100000","indexPrice":"100000","ask1Price":"100000","ask1Size":"0.006","fundingRate":"0.0001","nextFundingTime":"1700006400000"},"cs":2,"ts":1700000000000}
+      {"topic":"orderbook.1.BTCUSDT","type":"snapshot","ts":1700000000000,"data":{"s":"BTCUSDT","b":[],"a":[["100000","0.006"]],"u":1,"seq":2},"cts":1700000000000}
+      |}];
     Pipe.close outgoing;
     return ())
 ;;
