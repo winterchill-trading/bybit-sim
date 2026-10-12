@@ -418,7 +418,6 @@ let valid_topic t (conn : Conn.t) (topic : Topic.t) =
 let subscribe_snapshot t conn (topic : Topic.t) =
   match topic with
   | Orderbook { depth; symbol } ->
-    flush_symbol_books t symbol;
     let key = Topic.to_string topic in
     let bt =
       Hashtbl.find_or_add t.book_topics key ~default:(fun () ->
@@ -431,7 +430,7 @@ let subscribe_snapshot t conn (topic : Topic.t) =
     in
     send conn (book_snapshot t bt)
   | Tickers symbol ->
-    flush_ticker t symbol;
+    if not (Hashtbl.mem t.tickers symbol) then flush_ticker t symbol;
     Option.iter (Hashtbl.find t.tickers symbol) ~f:(fun data ->
       send conn (ticker_message t data Snapshot))
   | Public_trade _ | Order _ | Execution _ | Position _ | Wallet | Other _ -> ()
@@ -462,6 +461,15 @@ let handle_subscribe t (conn : Conn.t) ~req_id ~op ~args ~subscribe =
                ~success:false
                ~ret_msg:(sprintf "error:handler not found,topic:%s" (Topic.to_string bad))))
      | None ->
+       (* Bring existing subscribers up to date first, so that a new subscriber's first
+          book or ticker message is its snapshot. *)
+       if subscribe
+       then
+         List.iter args ~f:(fun (topic : Topic.t) ->
+           match topic with
+           | Orderbook { symbol; _ } -> flush_symbol_books t symbol
+           | Tickers symbol -> flush_ticker t symbol
+           | _ -> ());
        if subscribe
        then
          conn.topics
