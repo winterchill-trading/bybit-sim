@@ -544,3 +544,28 @@ let%expect_test "private websocket" =
     Pipe.close outgoing;
     return ())
 ;;
+
+let%expect_test "step hooks and extra routes" =
+  Log.Global.set_output [];
+  let server = Server.create ~now (Adapt.create_exchange ()) in
+  let calls = ref 0 in
+  Server.on_step server (fun ~now ->
+    incr calls;
+    printf "hook at %d\n" now);
+  Server.add_route server ~path:"/sim/status" (fun () -> `Assoc [ "calls", `Int !calls ]);
+  Server.mutate server ~f:ignore;
+  let status, json =
+    Server.handle_http
+      server
+      ~meth:`GET
+      ~uri:(Uri.of_string "/sim/status")
+      ~headers:(Cohttp.Header.init ())
+      ~body:""
+  in
+  printf "%d %s\n" (Cohttp.Code.code_of_status status) (Yojson.Safe.to_string json);
+  [%expect {|
+    hook at 1700000000000000000
+    200 {"calls":1}
+    |}];
+  return ()
+;;

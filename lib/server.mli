@@ -61,8 +61,17 @@ val venue : t -> Venue.t
 (** Credits [initial_balance] to the account unless it has been seen before. *)
 val ensure_account : t -> Exchange_core.Account.t -> unit
 
-(** Steps the exchange clock, runs [f], then logs and publishes the events it produced. *)
+(** Steps the exchange clock, calls the {!on_step} hooks, runs [f], then logs and
+    publishes the events it produced (the hooks' included). *)
 val mutate : t -> f:(Venue.t -> 'a) -> 'a
+
+(** Adds a hook called by every {!mutate} right after the clock step, with the exchange's
+    time in nanoseconds. Hooks may mutate the exchange; they run in the order added. *)
+val on_step : t -> (now:int -> unit) -> unit
+
+(** Answers [GET path] with [f ()] as plain JSON (no envelope, HTTP 200), ahead of the
+    Bybit routes. For simulator-only endpoints such as status pages. *)
+val add_route : t -> path:string -> (unit -> Yojson.Safe.t) -> unit
 
 (** Answers one REST request (exposed for tests; the HTTP server calls it). *)
 val handle_http

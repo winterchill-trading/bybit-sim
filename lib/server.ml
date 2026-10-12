@@ -64,6 +64,8 @@ type t =
   ; dirty_books : Symbol.Hash_set.t
   ; mutable book_flush_scheduled : bool
   ; tickers : Ws_ticker.Data.t Symbol.Table.t (* last pushed per symbol *)
+  ; mutable step_hooks : (now:int -> unit) list (* in registration order *)
+  ; extra_routes : (unit -> Yojson.Safe.t) String.Table.t
   }
 
 let wall_clock () = Time_ns.now () |> Time_ns.to_int_ns_since_epoch
@@ -91,6 +93,8 @@ let create ?(config = Config.default) ?(now = wall_clock) exchange =
     ; dirty_books = Symbol.Hash_set.create ()
     ; book_flush_scheduled = false
     ; tickers = Symbol.Table.create ()
+    ; step_hooks = []
+    ; extra_routes = String.Table.create ()
     }
   in
   step_clock t;
@@ -385,8 +389,15 @@ let publish t =
   schedule_book_flush t
 ;;
 
+let on_step t f = t.step_hooks <- t.step_hooks @ [ f ]
+let add_route t ~path f = Hashtbl.set t.extra_routes ~key:path ~data:f
+
 let mutate t ~f =
   step_clock t;
+  if not (List.is_empty t.step_hooks)
+  then (
+    let now = Exchange.now (exchange t) in
+    List.iter t.step_hooks ~f:(fun hook -> hook ~now));
   let result = f t.venue in
   Venue.sync t.venue;
   publish t;
@@ -834,6 +845,8 @@ let handle_http t ~meth ~uri ~headers ~body =
     List.exists private_routes ~f:(fun (m, p) -> Poly.equal m meth && String.equal p path)
   in
   match meth with
+  | `GET when Hashtbl.mem t.extra_routes path ->
+    `OK, (Hashtbl.find_exn t.extra_routes path) ()
   | `GET when not is_private ->
     (match get_public t path uri with
      | Some result -> `OK, envelope t (no_ext result)
