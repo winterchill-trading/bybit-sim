@@ -64,6 +64,63 @@ module Source = struct
       Price_anchor.Source.of_norm ~dir spec.reference ~from ~to_
     | Custom f -> f spec
   ;;
+
+  (* A date or a time; [`Date] keeps a date apart so [to_] can mean its end. *)
+  let parse_time s =
+    match Date.of_string s with
+    | date -> Ok (`Date date)
+    | exception _ ->
+      (match Time_ns.of_string_with_utc_offset s with
+       | time -> Ok (`Time time)
+       | exception _ -> Or_error.error_s [%message "expected a time or a UTC date" s])
+  ;;
+
+  let start_of_day date =
+    Time_ns.of_date_ofday ~zone:Time_float.Zone.utc date Time_ns.Ofday.start_of_day
+  ;;
+
+  let date_of = function
+    | `Date date -> date
+    | `Time time -> Time_ns.to_date time ~zone:Time_float.Zone.utc
+  ;;
+
+  let of_flags ~raw ~norm ~from ~to_ =
+    let open Or_error.Let_syntax in
+    let range () =
+      match from, to_ with
+      | Some from, Some to_ ->
+        let%bind from = parse_time from in
+        let%map to_ = parse_time to_ in
+        from, to_
+      | _ ->
+        Or_error.error_string
+          "-anchor-raw and -anchor-norm need -anchor-from and -anchor-to"
+    in
+    match raw, norm with
+    | None, None ->
+      if Option.is_some from || Option.is_some to_
+      then
+        Or_error.error_string
+          "-anchor-from and -anchor-to need -anchor-raw or -anchor-norm"
+      else Ok Live
+    | Some _, Some _ -> Or_error.error_string "-anchor-raw and -anchor-norm are exclusive"
+    | Some dir, None ->
+      let%map from, to_ = range () in
+      let from =
+        match from with
+        | `Date date -> start_of_day date
+        | `Time time -> time
+      in
+      let to_ =
+        match to_ with
+        | `Date date -> start_of_day (Date.add_days date 1)
+        | `Time time -> time
+      in
+      Raw { dir; from; to_ }
+    | None, Some dir ->
+      let%map from, to_ = range () in
+      Norm { dir; from = date_of from; to_ = date_of to_ }
+  ;;
 end
 
 module Source_state = struct

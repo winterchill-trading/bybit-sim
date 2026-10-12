@@ -52,6 +52,18 @@ module Source : sig
   [@@deriving sexp_of]
 
   val open_ : t -> Spec.t -> Price_anchor.Source.t Deferred.Or_error.t
+
+  (** The source chosen by the simulator's flags: [Live] without [raw] or [norm]. [from]
+      and [to_] are required with either, as ISO 8601 times with a zone
+      ([2026-10-12T15:05:00Z]) or UTC dates ([2026-10-12]). A [Raw] range is
+      [[from, to_)], a date [to_] meaning the end of that day; a [Norm] range is the UTC
+      days of [from] and [to_], inclusive. *)
+  val of_flags
+    :  raw:string option
+    -> norm:string option
+    -> from:string option
+    -> to_:string option
+    -> t Or_error.t
 end
 
 type t
