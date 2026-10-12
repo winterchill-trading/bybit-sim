@@ -289,3 +289,8 @@ let create ?(config = Config.default) ?market_sim server specs =
   Server.add_route server ~path (fun () -> status t);
   t
 ;;
+
+let log_summary_every t span =
+  Clock_ns.every span (fun () ->
+    Log.Global.info_s [%message "anchor status" ~_:(summary t : Sexp.t)])
+;;

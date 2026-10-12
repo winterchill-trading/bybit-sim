@@ -78,6 +78,11 @@ let command =
          "-anchor-size-factor"
          (optional_with_default 1. float)
          ~doc:"F reference sizes are multiplied by F (default 1)"
+     and anchor_status_interval_s =
+       flag
+         "-anchor-status-interval-s"
+         (optional_with_default 10 int)
+         ~doc:"S log every anchor's status every S seconds (default 10, 0 disables)"
      and anchor_raw =
        flag
          "-anchor-raw"
@@ -183,6 +188,11 @@ let command =
            Bybit_sim_anchor.Anchors.create ~config ?market_sim server anchor_specs
            |> ok_exn
          in
+         if anchor_status_interval_s > 0
+         then
+           Bybit_sim_anchor.Anchors.log_summary_every
+             anchors
+             (Time_ns.Span.of_int_sec anchor_status_interval_s);
          don't_wait_for (Bybit_sim_anchor.Anchors.run anchors anchor_source));
        Option.iter market_sim ~f:(Server.run_market_sim server);
        Cohttp_async.Server.close_finished http)

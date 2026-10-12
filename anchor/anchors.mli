@@ -97,3 +97,6 @@ val status : t -> Yojson.Safe.t
 
 (** One line per anchor, for the periodic log. *)
 val summary : t -> Sexp.t
+
+(** Logs {!summary} at [info] every [span]. *)
+val log_summary_every : t -> Time_ns.Span.t -> unit
