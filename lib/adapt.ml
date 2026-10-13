@@ -302,7 +302,9 @@ let ticker ex ~last_price symbol : Tickers.Ticker.t option =
     ; bid1_size = sz bid
     ; ask1_price = px ask
     ; ask1_size = sz ask
-    ; funding_rate = Some (Decimal.of_float config.default_funding_rate)
+    ; funding_rate =
+        (* The simulator config holds the funding rate as a float. *)
+        Some ((Decimal.of_float [@alert "-lossy"]) config.default_funding_rate)
     ; next_funding_time = ms next_funding
     ; open_interest = None
     ; volume24h = None

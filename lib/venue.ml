@@ -341,7 +341,8 @@ let fee_rate t (e : Exchange_core_engine.Execution.t) =
   | None -> Decimal.zero
   | Some i ->
     let bps = if e.settlement.crossed then i.fees.taker_bps else i.fees.maker_bps in
-    Decimal.of_float (bps /. 10_000.)
+    (* Instrument fees are configured as float basis points in the engine. *)
+    (Decimal.of_float [@alert "-lossy"]) (bps /. 10_000.)
 ;;
 
 let execution ?category t (e : Exchange_core_engine.Execution.t) =
