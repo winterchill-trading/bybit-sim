@@ -26,6 +26,11 @@ dune exec bybit-sim -- -port 3400
 | `-initial-balance` | 1000000 | USDT credited to any API key on first use |
 | `-anchor ...` | | follow a reference market, see [Anchoring](#anchoring-to-a-reference-market) |
 | `-input-journal` | | binary journal of every engine input |
+| `-collar-bps N`, `-collar-ticks N` | off | price collar, see [Price collar and halts](#price-collar-and-halts) |
+| `-collar-reference` | `mark` when anchored, else `last` | `last`, `mid` or `mark` |
+| `-collar-action` | `reject` | `reject` or `reprice` |
+| `-halt-levels` | off | circuit breaker levels, e.g. `7:15m,13:15m,20:reopen` |
+| `-halt-scope` | `market` | `market` or `symbol` |
 | `-log-level` | info | `debug`, `info`, `warn` or `error` |
 
 Logs go to stderr: fills and liquidations at `info`, every event and websocket
@@ -113,6 +118,56 @@ goes through the engine's journaled calls, so `-input-journal` replays an anchor
 without the reference data (`anchor/test/test_recorded.ml` checks this on the recorded
 minute). Live sources are never paced; with `-anchor-speed` above 1 the exchange clock
 runs ahead of the wall clock until the recording ends.
+
+## Price collar and halts
+
+The engine's price collar and halt rule (`Price_collar`, `Halt_rule` in
+`exchange-core-engine`) are off unless a flag turns them on:
+
+```sh
+dune exec bybit-sim -- -collar-bps 50 -halt-levels 7:15m,13:15m,20:reopen
+```
+
+- **Collar.** `-collar-bps N` (or `-collar-ticks N`) sets a band around a reference price
+  on every symbol: the last trade, the book mid or the mark (`-collar-reference`; the mark
+  by default when an `-anchor` is given, else the last trade). A marketable limit order
+  priced beyond the band is rejected (`-collar-action reject`) or re-priced to the band
+  (`reprice`). Market orders are never rejected; their protection price is clamped to
+  the band. Post-only orders and orders that would rest are not checked, and an order
+  with no reference price yet passes (`collar_unreferenced`).
+- **Halts.** `-halt-levels` lists `PERCENT:DURATION` levels: a move of the mark that many
+  percent from the symbol's session reference (its first mark) halts trading for the
+  duration (`30s`, `15m`, `1h`), or until `POST /sim/reopen` with `reopen`. Each level
+  triggers once per session. `-halt-scope market` halts every symbol, `symbol` only the
+  one that moved. While halted, orders that would trade are rejected; passive orders
+  rest and cancels work.
+
+The settings are recorded engine inputs, so an `-input-journal` replays them and the
+same guard events.
+
+| Rejection | retCode | retMsg |
+| --- | --- | --- |
+| Limit buy beyond the collar (create, batch item or amend) | 110003 | `Order price exceeds the allowable range: max buy price <bound>.` |
+| Limit sell beyond the collar | 110003 | `Order price exceeds the allowable range: min sell price <bound>.` |
+| Order that would trade while the symbol is halted | 10001 | `params error: symbol is halted` |
+
+110003 is Bybit's code for an order price outside the allowed range. Bybit publishes no
+code for a halted perpetual, so 10001 and its text are the simulator's choice. A rejected
+amend keeps the original order, as for any rejected amend.
+
+Simulator endpoints (plain JSON, no envelope):
+
+- `GET /sim/guard`: the collar settings, the halt rule, each symbol's collar reference,
+  session reference and halt (`{"until_ms": ...}`, `"until_reopen"`,
+  `"reopen_pending"` or `null`), the counters (`collar_rejected`, `collar_repriced`,
+  `collar_unreferenced`, `halt_rejected`, `halts`, `reopens`) and the last 50 guard
+  events. Each guard event is also logged at `info`.
+- `POST /sim/reopen` (optional `?symbol=BTCUSDT`): lifts the halt of that symbol, or of
+  every halted symbol, and answers the same status; 400 for an unknown symbol.
+
+`scripts/collar-e2e.sh [SECONDS]` runs `market-maker` against a simulator with a 50 bps
+collar and the halt levels above, then checks that a buy 5% above the best ask gets
+110003.
 
 ## Authentication
 
@@ -252,7 +307,9 @@ websocat ws://localhost:3400/v5/private
   coin lists hold only USDT.
 - The liquidation price is the engine's estimate and may be far out of range instead of
   `""`.
-- Error texts for 10001 are the simulator's own.
+- Error texts for 10001 are the simulator's own. Bybit's price limits for linear
+  contracts are not modelled; the optional collar and halt rule stand in for them (see
+  [Price collar and halts](#price-collar-and-halts)).
 
 ## Build
 
@@ -296,6 +353,7 @@ caches the built opam switch between runs.
 | `Adapt` | Universe and Bybit trading rules, request validation, engine rejection to retCode or rejectReason, conversions to bybit-protocol types (orderbook and deltas, trades, tickers, executions, positions, wallet) |
 | `Orders` | Order registry: Bybit order ids stable across amends, order type and time in force, cumulative fills, status and reject reason, closed order history |
 | `Venue` | The engine plus the registry: Bybit's trading and account endpoints, event buffering for the streams |
+| `Guard` | The price collar and halt rule flags, applying them to the engine, Bybit's codes for their rejections, the `/sim/guard` status |
 | `Server` | cohttp-async server for the REST routes and both websocket streams (async_websocket); drives the clock and the market simulation; clock step hooks and plain JSON routes for simulator endpoints |
 
 `Bybit_sim_anchor`:
@@ -317,6 +375,9 @@ path.
 `dune test` runs the server over HTTP and websocket on a free port with a fixed clock
 (market data, order outcomes, amend, cancel, batch, executions, positions, wallet,
 authentication, public and private streams), unit tests of the conversions, and a seeded
-market simulation on the Bybit universe. `anchor/test` covers the anchor flags, a feed
+market simulation on the Bybit universe. `test_guard.ml` covers the collar and halt
+flags, their rejections (create and amend), re-pricing, halts lifting and reopening, the
+`/sim/guard` status and a journal replay reproducing the guard events. `anchor/test` covers the anchor flags, a feed
 driving shadow levels, a replay fill and staleness, the recorded Bybit minute through the
-raw normalizer with a journal replay of the whole run, and normalized event logs.
+raw normalizer with a journal replay of the whole run (also with a mark collar, whose
+guard events the replay reproduces), and normalized event logs.
