@@ -17,7 +17,7 @@ module Config : sig
     { collar : Price_collar.Config.t option (** set on every instrument *)
     ; halt_rule : Halt_rule.Config.t option
     }
-  [@@deriving sexp_of]
+  [@@deriving sexp_of, equal]
 
   (** No collar, no halt rule. *)
   val off : t

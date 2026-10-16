@@ -118,6 +118,7 @@ let command =
          ~doc:
            "FILE write every engine input (client requests, noise traders, anchors) to \
             FILE, a binary journal that replays the whole run"
+     and guard = Guard.Config.param
      and log_level =
        flag
          "-log-level"
@@ -135,6 +136,13 @@ let command =
            ~to_:anchor_to
          |> ok_exn
        in
+       let%bind guard =
+         match guard ~anchored:(not (List.is_empty anchor_specs)) with
+         | Ok guard -> return guard
+         | Error e ->
+           eprintf "bybit-sim: %s\n" (Error.to_string_hum e);
+           exit 2
+       in
        let exchange = Adapt.create_exchange () in
        Option.iter input_journal ~f:(fun path ->
          let journal = Exchange_core_engine.Journal.create path in
@@ -146,6 +154,10 @@ let command =
            return ());
          (* So that ^C and SIGTERM still run the at_shutdown handlers. *)
          Signal.handle Signal.terminating ~f:(fun _ -> shutdown 0));
+       (* After the journal is attached, so that it records the settings. *)
+       Guard.apply guard exchange |> ok_exn;
+       if not (Guard.Config.equal guard Guard.Config.off)
+       then Log.Global.info_s [%message "guard" ~_:(guard : Guard.Config.t)];
        let server =
          Server.create
            ~config:

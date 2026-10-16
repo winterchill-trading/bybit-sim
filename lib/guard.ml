@@ -49,7 +49,7 @@ module Config = struct
     { collar : Price_collar.Config.t option
     ; halt_rule : Halt_rule.Config.t option
     }
-  [@@deriving sexp_of]
+  [@@deriving sexp_of, equal]
 
   let off = { collar = None; halt_rule = None }
 
