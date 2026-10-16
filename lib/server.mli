@@ -10,6 +10,11 @@
       [/v5/order/cancel-all], [/v5/order/amend]; [GET /v5/order/realtime],
       [/v5/execution/list], [/v5/position/list], [/v5/account/wallet-balance].
 
+    Simulator endpoints (plain JSON, no envelope): [GET /sim/guard], the price collar and
+    halt rule status ({!Guard.status}), and [POST /sim/reopen] (optional [symbol] query
+    parameter), which lifts halts ({!Exchange_core_engine.Exchange.reopen}) and answers
+    the same status.
+
     Private requests are identified by the [X-BAPI-API-KEY] header: the key {e is} the
     account, and every key is credited [Config.initial_balance] the first time it is seen.
     [X-BAPI-SIGN] is not verified, but [X-BAPI-TIMESTAMP] must be present and within

@@ -838,6 +838,21 @@ let private_routes =
   ]
 ;;
 
+let guard_status t =
+  mutate t ~f:(fun venue -> Guard.status ~recent:(Venue.guard_events venue) (exchange t))
+;;
+
+(* [POST /sim/reopen?symbol=S]: lifts the halt of [S], or of every halted symbol. *)
+let reopen t uri =
+  match Option.map (query uri "symbol") ~f:Symbol.of_string with
+  | Some symbol when not (known_symbol t symbol) ->
+    ( `Bad_request
+    , `Assoc [ "error", `String ("unknown symbol " ^ Symbol.to_string symbol) ] )
+  | symbol ->
+    mutate t ~f:(fun venue -> Exchange.reopen ?symbol (Venue.exchange venue));
+    `OK, guard_status t
+;;
+
 let handle_http t ~meth ~uri ~headers ~body =
   let path = Uri.path uri in
   let no_ext = Result.map ~f:(fun json -> json, None) in
@@ -845,6 +860,8 @@ let handle_http t ~meth ~uri ~headers ~body =
     List.exists private_routes ~f:(fun (m, p) -> Poly.equal m meth && String.equal p path)
   in
   match meth with
+  | `GET when String.equal path "/sim/guard" -> `OK, guard_status t
+  | `POST when String.equal path "/sim/reopen" -> reopen t uri
   | `GET when Hashtbl.mem t.extra_routes path ->
     `OK, (Hashtbl.find_exn t.extra_routes path) ()
   | `GET when not is_private ->
