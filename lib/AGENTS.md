@@ -7,5 +7,8 @@ Library `bybit_sim`: the Bybit-shaped front end over the shared engine.
 - `Orders` is the order registry: Bybit order ids, cumulative fills, status, reject reason and the
   closed history.
 - `Venue` joins the engine and the registry; it buffers events for the streams.
+- `Guard` holds the collar and halt flags, applies them to the engine and maps their
+  rejections to Bybit codes (110003, 10001). Keep the error texts in step with the README
+  table.
 - `Server` runs cohttp-async for REST and both websockets and drives the clock.
 - Build: `dune build --root .. @bybit-sim/all` from the repository root.
