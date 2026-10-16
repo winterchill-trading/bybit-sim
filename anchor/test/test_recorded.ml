@@ -94,6 +94,59 @@ let%expect_test "a recorded minute, and its journal replays the run" =
   [%expect {| ((inputs 3409) (same_state true)) |}]
 ;;
 
+let%expect_test "a mark collar on a recorded minute; the journal replays its guard events"
+  =
+  Log.Global.set_output [];
+  let exchange = Adapt.create_exchange () in
+  let inputs = Queue.create () in
+  Exchange.record_inputs exchange ~f:(Queue.enqueue inputs);
+  let guard =
+    ok_exn (Guard.Config.of_flags ~collar_bps:5 ~halt_levels:"7:15m" ~anchored:true ())
+  in
+  Guard.apply guard exchange |> ok_exn;
+  let server = Server.create ~now:(fun () -> Time_ns.to_int_ns_since_epoch t0) exchange in
+  let anchors =
+    ok_exn
+      (Anchors.create ~config:{ Anchors.Config.default with speed = 0. } server [ spec ])
+  in
+  let%map () =
+    Anchors.run
+      anchors
+      (Raw { dir; from = minute; to_ = Time_ns.add minute Time_ns.Span.minute })
+  in
+  (* Marketable against the shadow levels, but more than 5 bps from the mark. *)
+  place server ~side:"Buy" ~px:"83500.0" ~qty:"0.01";
+  place server ~side:"Sell" ~px:"81500.0" ~qty:"0.01";
+  [%expect
+    {|
+    200 {"retCode":110003,"retMsg":"Order price exceeds the allowable range: max buy price 82689.2.","result":{},"retExtInfo":{},"time":1791817518000}
+    200 {"retCode":110003,"retMsg":"Order price exceeds the allowable range: min sell price 82606.6.","result":{},"retExtInfo":{},"time":1791817518000}
+    |}];
+  Venue.sync (Server.venue server);
+  let live = Venue.guard_events (Server.venue server) in
+  let replayed =
+    Journal.replay
+      ~config:(Adapt.config ())
+      (ok_exn (Journal.of_string (Journal.to_string (Queue.to_list inputs))))
+  in
+  print_s
+    [%message
+      ""
+        ~live:(List.length live : int)
+        ~stats:(Exchange.guard_stats exchange : Guard_event.Stats.t)
+        ~same_events:
+          ([%equal: Guard_event.t list] live (Exchange.drain_guard_events replayed)
+           : bool)];
+  [%expect
+    {|
+    ((live 2)
+     (stats
+      ((collar_rejected 2) (collar_repriced 0) (collar_unreferenced 0)
+       (halt_rejected 0) (halts 0) (reopens 0)))
+     (same_events true))
+    |}]
+;;
+
 let%expect_test "normalized event logs" =
   Log.Global.set_output [];
   let dir = "norm-source-test" in
