@@ -34,6 +34,10 @@ end
 (** Drains the engine's events into the buffer. *)
 val sync : t -> unit
 
+(** The last 50 guard events of the price collar and the halt rule, oldest first. {!sync}
+    drains them from the engine and logs each one. *)
+val guard_events : t -> Exchange_core_engine.Guard_event.t list
+
 (** Syncs, then returns and clears the buffer. *)
 val drain : t -> Output.t
 

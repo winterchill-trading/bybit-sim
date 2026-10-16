@@ -22,6 +22,7 @@ type t =
   ; mutable events : Event.t list (* newest first *)
   ; mutable changed : Order.t list (* newest first *)
   ; mutable trades : Public_trade.Trade.t list (* newest first *)
+  ; guard_events : Exchange_core_engine.Guard_event.t Queue.t (* oldest first *)
   }
 
 let create exchange =
@@ -32,6 +33,7 @@ let create exchange =
   ; events = []
   ; changed = []
   ; trades = []
+  ; guard_events = Queue.create ()
   }
 ;;
 
@@ -40,8 +42,21 @@ let orders t = t.orders
 let now t = Exchange.now t.exchange
 let book_seq t symbol = Hashtbl.find t.book_seq symbol |> Option.value ~default:0
 let changed t o = t.changed <- o :: t.changed
+let max_guard_events = 50
+let guard_events t = Queue.to_list t.guard_events
+
+(* The engine keeps guard events until drained; keep the last few for [GET /sim/guard]. *)
+let sync_guard_events t =
+  List.iter (Exchange.drain_guard_events t.exchange) ~f:(fun event ->
+    Async.Log.Global.info_s
+      [%message "guard event" ~_:(event : Exchange_core_engine.Guard_event.t)];
+    Queue.enqueue t.guard_events event;
+    if Queue.length t.guard_events > max_guard_events
+    then ignore (Queue.dequeue_exn t.guard_events : Exchange_core_engine.Guard_event.t))
+;;
 
 let sync t =
+  sync_guard_events t;
   List.iter (Exchange.drain_events t.exchange) ~f:(fun event ->
     t.events <- event :: t.events;
     Option.iter (Event.book_symbol event) ~f:(fun symbol ->
@@ -132,6 +147,7 @@ let place_order t account (p : Create_order.Params.t) =
     if fok_unfillable
     then None, cancelled_at_once t account p No_enough_qty_to_fill
     else (
+      let collar_rejected_before = Guard.collar_rejected t.exchange in
       let engine_id, status = Exchange.place_with_order_id t.exchange account req in
       match status with
       | Resting { order_id; _ } | Filled { order_id; _ } ->
@@ -140,7 +156,14 @@ let place_order t account (p : Create_order.Params.t) =
         Some engine_id, Ok (ack o)
       | Rejected reason ->
         sync t;
-        (match Adapt.rejection reason with
+        (match
+           Guard.rejection
+             t.exchange
+             ~collar_rejected_before
+             ~symbol:req.symbol
+             ~side:req.side
+             reason
+         with
          | Api_error e -> Some engine_id, Error e
          | Cancelled reason -> Some engine_id, cancelled_at_once t account p reason))
 ;;
@@ -294,6 +317,7 @@ let amend_order t account (req : Amend_order.Request.t) =
   let old_px = Order.price o in
   let old_leaves = Order.leaves_qty o in
   let time = now t in
+  let collar_rejected_before = Guard.collar_rejected t.exchange in
   match
     Exchange.modify t.exchange account (Order_id oid) (resting_request o ~size:leaves ~px)
   with
@@ -311,7 +335,14 @@ let amend_order t account (req : Amend_order.Request.t) =
      | Rejected _ -> Orders.cancelled t.orders o ~time);
     sync t;
     changed t o;
-    (match Adapt.rejection reason with
+    (match
+       Guard.rejection
+         t.exchange
+         ~collar_rejected_before
+         ~symbol:(Order.symbol o)
+         ~side:(Order.side o)
+         reason
+     with
      | Api_error e -> Error e
      | Cancelled reason ->
        Error
