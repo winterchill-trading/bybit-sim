@@ -81,12 +81,22 @@ reusable workflow. To check a run: `gh run list --limit 1`, then at most one
   message is a delta instead of the snapshot.
 - In this Async version `Bus.iter_exn` does not exist; use `Bus.subscribe_permanently_exn`.
 - `Cohttp.Code.meth` has no `equal`; use `Poly.equal`.
+- The engine reports a collar rejection as `Invalid_price`, the same reason as a tick
+  error. `Guard.rejection` tells them apart by the `collar_rejected` counter rising during
+  the call; read the counter before calling the engine. Halt rejections are
+  `Unsupported "trading halted"`.
+- `Exchange.drain_guard_events` forgets what it returns, and `Venue.sync` drains it for the
+  status and the log. Tests that want the live guard events read `Venue.guard_events`; a
+  replayed exchange (no venue) is drained directly.
+- Apply `Guard` after attaching an input journal, or the journal misses the settings and
+  its replay diverges.
 - The simulator does not check signatures, recv windows or rate limits. Do not write tests that
   depend on them failing.
 
 ## Where to read more
 
-- `README.md` (endpoints, outcomes, websocket, differences from Bybit).
+- `README.md` (endpoints, outcomes, price collar and halts, websocket, differences from
+  Bybit) and `CHANGES.md`.
 - `../specs/repos/bybit-sim.md` and `../specs/design/simulators.md`.
 - `../specs/design/price-anchor.md` for the anchoring design.
 - Skills in `../oxcaml-claude-skills/skills/`: `async-http-websocket`, `janestreet-ocaml-style`.
